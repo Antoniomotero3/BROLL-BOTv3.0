@@ -8,7 +8,6 @@ import json
 from video_transcriber import process_video_to_training_data
 from model_trainer import train_model 
 from intelligent_image_searcher import search_and_rank_images, load_trained_mapper_model
-from downloader import download_images_for_script
 
 CONFIG_FILE = "config.json"
 
