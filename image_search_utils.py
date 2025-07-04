@@ -1,5 +1,4 @@
 import requests
-import time
 
 def duckduckgo_image_search(query, max_results=10):
     search_url = "https://duckduckgo.com/"

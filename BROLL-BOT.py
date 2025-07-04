@@ -78,9 +78,8 @@ class BrollBotApp:
         if not script:
             messagebox.showwarning("Empty Script", "Please paste a script to search for.")
             return
-        openai_key = self.openai_entry.get().strip()
         top_k = int(self.image_count_spinbox.get())
-        threading.Thread(target=self.run_search, args=(script, top_k, openai_key)).start()
+        threading.Thread(target=self.run_search, args=(script, top_k)).start()
 
     def run_training(self):
         try:
@@ -96,13 +95,13 @@ class BrollBotApp:
         except Exception as e:
             self.status_label.config(text=f"❌ Error during training: {e}")
 
-    def run_search(self, script, top_k, openai_key):
+    def run_search(self, script, top_k):
         try:
             self.status_label.config(text="Searching for images...")
             mapper_model = load_trained_mapper_model()
             script_text = self.script_input.get("1.0", tk.END)
             script_lines = script_text.strip().split('\n')
-            results = search_and_rank_images(script_lines, mapper_model, top_k, openai_key)
+            results = search_and_rank_images(script_lines, mapper_model, top_k)
             download_images_for_script(results, top_k)
             self.status_label.config(text="✅ Search complete!")
 

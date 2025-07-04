@@ -1,4 +1,4 @@
-from sentence_transformers import SentenceTransformer, util
+from sentence_transformers import SentenceTransformer
 from image_search_utils import duckduckgo_image_search, wikimedia_image_search
 import torch
 import os
@@ -29,9 +29,8 @@ def search_and_rank_images(script_lines, mapper_model, top_k):
 
         print(f"\n[INFO] Processing line: {line}")
 
-        # Generate embedding and map to image query
-        text_embedding = embedder.encode([line], convert_to_tensor=True).to(device)
-        image_query_embedding = mapper_model(text_embedding)
+        # Generate embedding (currently unused placeholder)
+        embedder.encode([line], convert_to_tensor=True).to(device)
 
         # For simplicity, use the same text for keyword search
         search_query = line.strip()

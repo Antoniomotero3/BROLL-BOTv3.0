@@ -6,7 +6,6 @@ from PIL import Image
 from tqdm import tqdm
 from sentence_transformers import SentenceTransformer
 from torch import nn, optim
-from torchvision import transforms
 
 MODEL_DIR = os.path.join(os.getcwd(), "models")
 MODEL_PATH = os.path.join(MODEL_DIR, "latest_model.pt")
@@ -27,8 +26,6 @@ def save_trained_mapper_model(model):
     print(f"✅ Trained model saved to {MODEL_PATH}")
 
 def load_trained_mapper_model(path=MODEL_PATH):
-    sentence_model = SentenceTransformer("all-MiniLM-L6-v2")
-    clip_model, _ = clip.load("ViT-B/32")
     device = "cuda" if torch.cuda.is_available() else "cpu"
     mapper_model = nn.Sequential(
         nn.Linear(384, 512),
