@@ -1,14 +1,11 @@
 import os
 import json
-import subprocess
 import tempfile
-from moviepy import VideoFileClip
-from whisper import load_model as load_whisper
+from moviepy.editor import VideoFileClip
 import torch
 import whisper
 import cv2
 from tqdm import tqdm
-from pathlib import Path
 
 def process_video_to_training_data(video_path, output_dir="frames", frame_interval=1, model_size="base"):
     """
@@ -81,7 +78,7 @@ def extract_audio_from_video(video_path, output_path):
     return audio_path
 
 def transcribe_audio_whisper(audio_path, model_size="base"):
-    model = load_whisper(model_size)
+    model = whisper.load_model(model_size)
     result = model.transcribe(audio_path)
     return result["segments"]  # Each segment has 'start', 'end', 'text'
 

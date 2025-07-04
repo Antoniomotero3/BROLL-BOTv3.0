@@ -6,7 +6,6 @@ from PIL import Image
 from tqdm import tqdm
 from sentence_transformers import SentenceTransformer
 from torch import nn, optim
-from torchvision import transforms
 
 # Paths
 MODEL_DIR = os.path.join(os.getcwd(), "models")
