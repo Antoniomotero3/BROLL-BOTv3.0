@@ -1,5 +1,9 @@
 import os
+import time
+from typing import List, Tuple
+
 import requests
+from requests.exceptions import RequestException
 from urllib.parse import urlparse
 from pathlib import Path
 
@@ -14,30 +18,45 @@ def get_next_script_folder(base_dir='images'):
     next_num = max(numbers, default=0) + 1
     return os.path.join(base_dir, f'script_{next_num}')
 
-def download_image(url, save_path):
-    try:
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
 
-        # Extract original extension
-        parsed_url = urlparse(url)
-        ext = os.path.splitext(parsed_url.path)[1]
-        if not ext or len(ext) > 5:
-            ext = '.jpg'  # fallback
+def is_valid_url(url: str) -> bool:
+    parsed = urlparse(url)
+    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
 
-        with open(save_path + ext, 'wb') as f:
-            f.write(response.content)
-        return True
-    except Exception as e:
-        print(f"[!] Failed to download {url}: {e}")
+def download_image(url: str, save_path: str, retries: int = 3) -> bool:
+    if not is_valid_url(url):
+        print(f"[WARN] Invalid URL skipped: {url}")
         return False
 
-def download_images_for_script(results, images_per_scene=4, base_dir='images'):
+    for attempt in range(1, retries + 1):
+        try:
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+
+            parsed_url = urlparse(url)
+            ext = os.path.splitext(parsed_url.path)[1]
+            if not ext or len(ext) > 5:
+                ext = '.jpg'
+
+            with open(save_path + ext, 'wb') as f:
+                f.write(response.content)
+            return True
+        except RequestException as e:
+            if attempt == retries:
+                print(f"[!] Failed to download {url}: {e}")
+                return False
+            time.sleep(2 ** attempt)
+
+def download_images_for_script(
+    results, images_per_scene: int = 4, base_dir: str = 'images'
+) -> Tuple[str, List[str]]:
     """
     results: list of tuples (script_line, [list of image urls])
     """
     script_dir = get_next_script_folder(base_dir)
     os.makedirs(script_dir, exist_ok=True)
+
+    failed: List[str] = []
 
     for line, urls in results:
         clean_line = sanitize_filename(line.strip())
@@ -52,6 +71,7 @@ def download_images_for_script(results, images_per_scene=4, base_dir='images'):
             success = download_image(url, save_name)
             if not success:
                 print(f"[!] Skipped downloading for line: {line}")
+                failed.append(url)
 
     print(f"✅ All images downloaded to: {script_dir}")
-    return script_dir
+    return script_dir, failed
