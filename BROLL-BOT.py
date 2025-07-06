@@ -17,6 +17,13 @@ def save_openai_key_to_config(key):
         json.dump(config_data, f, indent=2)
     print("✅ OpenAI API key saved")
 
+def load_openai_key_from_config():
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data.get("openai_api_key")
+    return None
+
 class BrollBotApp:
     def __init__(self, root):
         self.root = root
@@ -100,7 +107,8 @@ class BrollBotApp:
             mapper_model = load_trained_mapper_model()
             script_text = self.script_input.get("1.0", tk.END)
             script_lines = script_text.strip().split('\n')
-            results = search_and_rank_images(script_lines, mapper_model, top_k)
+            api_key = load_openai_key_from_config()
+            results = search_and_rank_images(script_lines, mapper_model, top_k, api_key)
             download_images_for_script(results, top_k)
             self.status_label.config(text="✅ Search complete!")
 

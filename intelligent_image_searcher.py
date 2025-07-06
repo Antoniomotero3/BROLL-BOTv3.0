@@ -7,6 +7,19 @@ from PIL import Image
 import requests
 from io import BytesIO
 import os
+from typing import List, Optional
+
+import nltk
+
+try:
+    nltk.data.find("tokenizers/punkt")
+except LookupError:
+    nltk.download("punkt", quiet=True)
+
+try:
+    nltk.data.find("taggers/averaged_perceptron_tagger")
+except LookupError:
+    nltk.download("averaged_perceptron_tagger", quiet=True)
 
 # Load the trained model from default path
 DEFAULT_MODEL_PATH = "models/latest_model.pt"
@@ -37,8 +50,46 @@ def load_trained_mapper_model(model_path: str = DEFAULT_MODEL_PATH):
     model.eval()
     return model
 
+
+def keywords_from_line(text: str, api_key: Optional[str] = None) -> List[str]:
+    """Return a list of keywords extracted from a line of text.
+
+    When an OpenAI API key is supplied, the function uses the completion API to
+    produce keywords. If that fails or no key is provided, a simple NLTK based
+    noun extraction is used instead.
+    """
+
+    if api_key:
+        try:
+            import openai
+
+            openai.api_key = api_key
+            prompt = (
+                "Extract the main keywords from the following sentence as a comma "
+                f"separated list:\n{text}\nKeywords:"
+            )
+            resp = openai.Completion.create(
+                engine="text-davinci-003",
+                prompt=prompt,
+                max_tokens=16,
+                n=1,
+                stop=None,
+                temperature=0.5,
+            )
+            completion = resp.choices[0].text.strip()
+            keywords = [kw.strip() for kw in completion.split(",") if kw.strip()]
+            if keywords:
+                return keywords
+        except Exception as e:
+            print(f"[WARN] OpenAI request failed: {e}. Falling back to NLTK.")
+
+    tokens = nltk.word_tokenize(text)
+    tagged = nltk.pos_tag(tokens)
+    nouns = [w for w, t in tagged if t.startswith("NN")]
+    return nouns[:5] if nouns else tokens[:5]
+
 # Main search and ranking logic
-def search_and_rank_images(script_lines, mapper_model, top_k):
+def search_and_rank_images(script_lines, mapper_model, top_k, openai_api_key: Optional[str] = None):
     """Search for images and rank them based on semantic similarity."""
 
     if not isinstance(script_lines, list):
@@ -65,7 +116,8 @@ def search_and_rank_images(script_lines, mapper_model, top_k):
         mapped_emb = mapper_model(text_emb).detach()
         mapped_emb = mapped_emb / mapped_emb.norm()
 
-        search_query = line.strip()
+        keywords = keywords_from_line(line, api_key=openai_api_key)
+        search_query = ", ".join(keywords) if keywords else line.strip()
 
         # Retrieve candidate image URLs
         try:

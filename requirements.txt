@@ -3,4 +3,6 @@ opencv-python-headless
 openai-whisper
 sentence-transformers
 clip @ git+https://github.com/openai/CLIP.git
+nltk
+openai
 
