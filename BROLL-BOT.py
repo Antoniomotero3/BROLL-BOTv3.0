@@ -8,6 +8,7 @@ import json
 from video_transcriber import process_video_to_training_data
 from model_trainer import train_model 
 from intelligent_image_searcher import search_and_rank_images, load_trained_mapper_model
+from downloader import download_images_for_script
 
 CONFIG_FILE = "config.json"
 
@@ -109,8 +110,13 @@ class BrollBotApp:
             script_lines = script_text.strip().split('\n')
             api_key = load_openai_key_from_config()
             results = search_and_rank_images(script_lines, mapper_model, top_k, api_key)
-            download_images_for_script(results, top_k)
+            script_dir, failures = download_images_for_script(results, top_k)
             self.status_label.config(text="✅ Search complete!")
+            if failures:
+                messagebox.showwarning(
+                    "Download Issues",
+                    f"{len(failures)} image(s) failed to download. Check the console for details."
+                )
 
         except Exception as e:
             self.status_label.config(text=f"❌ Error during search: {e}")
