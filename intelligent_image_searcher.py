@@ -89,7 +89,13 @@ def keywords_from_line(text: str, api_key: Optional[str] = None) -> List[str]:
     return nouns[:5] if nouns else tokens[:5]
 
 # Main search and ranking logic
-def search_and_rank_images(script_lines, mapper_model, top_k, openai_api_key: Optional[str] = None):
+def search_and_rank_images(
+    script_lines,
+    mapper_model,
+    top_k,
+    openai_api_key: Optional[str] = None,
+    status_callback=None,
+):
     """Search for images and rank them based on semantic similarity."""
 
     if not isinstance(script_lines, list):
@@ -104,12 +110,20 @@ def search_and_rank_images(script_lines, mapper_model, top_k, openai_api_key: Op
     clip_model.to(device)
 
     results = []
+    total_lines = len([l for l in script_lines if l.strip()])
+    processed = 0
 
     for line in script_lines:
         if not line.strip():
             continue
 
-        print(f"\n[INFO] Processing line: {line}")
+        processed += 1
+        if status_callback:
+            progress = int(((processed - 1) / total_lines) * 100)
+            status_callback(f"Searching images for line {processed}/{total_lines}", progress)
+
+        if not status_callback:
+            print(f"\n[INFO] Processing line: {line}")
 
         # Compute sentence embedding and map to CLIP space
         text_emb = embedder.encode(line, convert_to_tensor=True).to(device)
@@ -125,11 +139,13 @@ def search_and_rank_images(script_lines, mapper_model, top_k, openai_api_key: Op
             if not image_urls:
                 raise ValueError("DuckDuckGo returned no results.")
         except Exception as e:
-            print(f"[WARN] DuckDuckGo failed for '{line}': {e}. Trying Wikimedia...")
+            if not status_callback:
+                print(f"[WARN] DuckDuckGo failed for '{line}': {e}. Trying Wikimedia...")
             try:
                 image_urls = wikimedia_image_search(search_query, max_results=top_k)
             except Exception as e:
-                print(f"[ERROR] Wikimedia also failed for '{line}': {e}")
+                if not status_callback:
+                    print(f"[ERROR] Wikimedia also failed for '{line}': {e}")
                 image_urls = []
 
         scored_urls = []
@@ -145,11 +161,15 @@ def search_and_rank_images(script_lines, mapper_model, top_k, openai_api_key: Op
                 score = torch.nn.functional.cosine_similarity(img_emb, mapped_emb, dim=0)
                 scored_urls.append((score.item(), url))
             except Exception as e:
-                print(f"[WARN] Failed to embed image from {url}: {e}")
+                if not status_callback:
+                    print(f"[WARN] Failed to embed image from {url}: {e}")
 
         scored_urls.sort(key=lambda x: x[0], reverse=True)
         ranked_urls = [u for _, u in scored_urls]
 
         results.append((line, ranked_urls))
+
+    if status_callback:
+        status_callback("Image search complete.", 100)
 
     return results

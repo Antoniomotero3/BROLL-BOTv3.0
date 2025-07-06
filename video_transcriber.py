@@ -5,9 +5,14 @@ from moviepy.editor import VideoFileClip
 import torch
 import whisper
 import cv2
-from tqdm import tqdm
 
-def process_video_to_training_data(video_path, output_dir="frames", frame_interval=1, model_size="base"):
+def process_video_to_training_data(
+    video_path,
+    output_dir="frames",
+    frame_interval=1,
+    model_size="base",
+    status_callback=None,
+):
     """
     Transcribes video audio and extracts frames at regular intervals.
     Saves data in JSON format for training the mapper model.
@@ -18,7 +23,10 @@ def process_video_to_training_data(video_path, output_dir="frames", frame_interv
         frame_interval (int): Number of seconds between frame captures.
         model_size (str): Whisper model size to use (tiny, base, small, medium, large).
     """
-    print("🎬 Starting video processing and transcription...")
+    if status_callback:
+        status_callback("Starting video processing and transcription...", 0)
+    else:
+        print("🎬 Starting video processing and transcription...")
 
     os.makedirs(output_dir, exist_ok=True)
     training_data = []
@@ -32,7 +40,10 @@ def process_video_to_training_data(video_path, output_dir="frames", frame_interv
     segments = result.get("segments", [])
 
     if not segments:
-        print("❌ No transcription segments found.")
+        if status_callback:
+            status_callback("No transcription segments found.")
+        else:
+            print("❌ No transcription segments found.")
         return
 
     # Load video
@@ -40,9 +51,15 @@ def process_video_to_training_data(video_path, output_dir="frames", frame_interv
     fps = int(video.get(cv2.CAP_PROP_FPS))
     total_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
     duration = total_frames / fps
-    print(f"🎞️ Video FPS: {fps}, Duration: {duration:.2f}s")
+    if not status_callback:
+        print(f"🎞️ Video FPS: {fps}, Duration: {duration:.2f}s")
 
-    for i, segment in enumerate(tqdm(segments, desc="🧠 Mapping text to frames")):
+    for i, segment in enumerate(segments, start=1):
+        if status_callback:
+            progress = int((i / len(segments)) * 100)
+            status_callback(f"Mapping text to frames {i}/{len(segments)}", progress)
+        else:
+            pass
         text = segment["text"].strip()
         time = segment["start"]
         frame_number = int(time * fps)
@@ -51,7 +68,8 @@ def process_video_to_training_data(video_path, output_dir="frames", frame_interv
         video.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
         ret, frame = video.read()
         if not ret:
-            print(f"⚠️ Skipping frame at {time:.2f}s")
+            if not status_callback:
+                print(f"⚠️ Skipping frame at {time:.2f}s")
             continue
 
         # Save frame
@@ -68,8 +86,11 @@ def process_video_to_training_data(video_path, output_dir="frames", frame_interv
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(training_data, f, indent=2, ensure_ascii=False)
 
-    print(f"✅ Processed {len(training_data)} training samples.")
-    print(f"📦 Data saved to {json_path}")
+    if status_callback:
+        status_callback(f"Processed {len(training_data)} training samples.", 100)
+    else:
+        print(f"✅ Processed {len(training_data)} training samples.")
+        print(f"📦 Data saved to {json_path}")
 
 def extract_audio_from_video(video_path, output_path):
     video = VideoFileClip(video_path)
