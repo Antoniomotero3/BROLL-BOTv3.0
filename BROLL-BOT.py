@@ -7,7 +7,11 @@ import json
 
 from video_transcriber import process_video_to_training_data
 from model_trainer import train_model 
-from intelligent_image_searcher import search_and_rank_images, load_trained_mapper_model
+from intelligent_image_searcher import (
+    search_and_rank_images,
+    load_trained_mapper_model,
+    DEFAULT_MODEL_PATH,
+)
 from downloader import download_images_for_script
 
 CONFIG_FILE = "config.json"
@@ -81,12 +85,24 @@ class BrollBotApp:
         threading.Thread(target=self.run_training).start()
 
     def start_search(self):
-        script = self.script_input.get("1.0", tk.END).strip()
-        if not script:
-            messagebox.showwarning("Empty Script", "Please paste a script to search for.")
+        script_text = self.script_input.get("1.0", tk.END)
+        script_lines = [line.strip() for line in script_text.splitlines() if line.strip()]
+        if not script_lines:
+            messagebox.showwarning(
+                "Empty Script",
+                "Please paste a script with at least one non-empty line.",
+            )
             return
+
+        if not os.path.exists(DEFAULT_MODEL_PATH):
+            messagebox.showwarning(
+                "Model Missing",
+                "No trained model found. Please train the model before searching.",
+            )
+            return
+
         top_k = int(self.image_count_spinbox.get())
-        threading.Thread(target=self.run_search, args=(script, top_k)).start()
+        threading.Thread(target=self.run_search, args=(script_lines, top_k)).start()
 
     def run_training(self):
         try:
@@ -102,14 +118,21 @@ class BrollBotApp:
         except Exception as e:
             self.status_label.config(text=f"❌ Error during training: {e}")
 
-    def run_search(self, script, top_k):
+    def run_search(self, script_lines, top_k):
         try:
             self.status_label.config(text="Searching for images...")
             mapper_model = load_trained_mapper_model()
-            script_text = self.script_input.get("1.0", tk.END)
-            script_lines = script_text.strip().split('\n')
             api_key = load_openai_key_from_config()
             results = search_and_rank_images(script_lines, mapper_model, top_k, api_key)
+
+            if not results or not all(urls for _, urls in results):
+                messagebox.showwarning(
+                    "No Results",
+                    "One or more script lines produced no image URLs. Download skipped.",
+                )
+                self.status_label.config(text="No URLs found.")
+                return
+
             script_dir, failures = download_images_for_script(results, top_k)
             self.status_label.config(text="✅ Search complete!")
             if failures:
