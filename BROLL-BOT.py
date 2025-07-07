@@ -63,7 +63,14 @@ class BrollBotApp:
         self.status_label = tk.Label(root, text="Idle", fg="white", bg="#1e1e1e")
         self.status_label.pack()
 
+        self.progress['value'] = 0
+
         self.selected_video = None
+
+    def update_status(self, message, progress=None):
+        self.status_label.config(text=message)
+        if progress is not None:
+            self.progress['value'] = progress
 
     def save_key(self):
         key = self.openai_entry.get().strip()
@@ -82,6 +89,7 @@ class BrollBotApp:
         if not self.selected_video:
             messagebox.showwarning("No Video", "Please select a video file to train from.")
             return
+        self.update_status("Starting training...", 0)
         threading.Thread(target=self.run_training).start()
 
     def start_search(self):
@@ -101,29 +109,31 @@ class BrollBotApp:
             )
             return
 
+        self.update_status("Starting search...", 0)
+
         top_k = int(self.image_count_spinbox.get())
         threading.Thread(target=self.run_search, args=(script_lines, top_k)).start()
 
     def run_training(self):
         try:
-            self.status_label.config(text="Transcribing video and extracting frames...")
-            process_video_to_training_data(self.selected_video)
-            self.progress.step(30)
-
-            self.status_label.config(text="Training Model...")
-            train_model()
-            self.progress.step(70)
-
-            self.status_label.config(text="✅ Training complete!")
+            self.progress['value'] = 0
+            process_video_to_training_data(
+                self.selected_video, status_callback=self.update_status
+            )
+            train_model(status_callback=self.update_status)
+            self.update_status("✅ Training complete!", 100)
         except Exception as e:
-            self.status_label.config(text=f"❌ Error during training: {e}")
+            self.update_status(f"❌ Error during training: {e}")
 
     def run_search(self, script_lines, top_k):
         try:
-            self.status_label.config(text="Searching for images...")
+            self.progress['value'] = 0
+            self.update_status("Searching for images...", 0)
             mapper_model = load_trained_mapper_model()
             api_key = load_openai_key_from_config()
-            results = search_and_rank_images(script_lines, mapper_model, top_k, api_key)
+            results = search_and_rank_images(
+                script_lines, mapper_model, top_k, api_key, status_callback=self.update_status
+            )
 
             if not results or not all(urls for _, urls in results):
                 messagebox.showwarning(
@@ -134,7 +144,7 @@ class BrollBotApp:
                 return
 
             script_dir, failures = download_images_for_script(results, top_k)
-            self.status_label.config(text="✅ Search complete!")
+            self.update_status("✅ Search complete!", 100)
             if failures:
                 messagebox.showwarning(
                     "Download Issues",
@@ -142,7 +152,7 @@ class BrollBotApp:
                 )
 
         except Exception as e:
-            self.status_label.config(text=f"❌ Error during search: {e}")
+            self.update_status(f"❌ Error during search: {e}")
 
 if __name__ == "__main__":
     root = tk.Tk()

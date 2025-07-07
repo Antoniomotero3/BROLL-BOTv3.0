@@ -3,7 +3,6 @@ import json
 import torch
 import clip
 from PIL import Image
-from tqdm import tqdm
 from sentence_transformers import SentenceTransformer
 from torch import nn, optim
 
@@ -41,8 +40,16 @@ def load_trained_mapper_model(path=MODEL_PATH):
 
     return mapper_model.eval()
 
-def train_model(data_path="training_data.json", epochs=10, lr=1e-4):
-    print("🧠 Starting training pipeline...")
+def train_model(
+    data_path="training_data.json",
+    epochs=10,
+    lr=1e-4,
+    status_callback=None,
+):
+    if status_callback:
+        status_callback("Starting training pipeline...", 0)
+    else:
+        print("🧠 Starting training pipeline...")
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     sentence_model = SentenceTransformer("all-MiniLM-L6-v2")
@@ -59,11 +66,12 @@ def train_model(data_path="training_data.json", epochs=10, lr=1e-4):
     loss_fn = nn.MSELoss()
 
     data = load_training_data(data_path)
-    print(f"📁 Loaded {len(data)} training samples.")
+    if not status_callback:
+        print(f"📁 Loaded {len(data)} training samples.")
 
     for epoch in range(epochs):
         total_loss = 0.0
-        for item in tqdm(data, desc=f"Epoch {epoch+1}/{epochs}"):
+        for item in data:
             text = item["text"]
             image_path = item["image"]
 
@@ -71,7 +79,8 @@ def train_model(data_path="training_data.json", epochs=10, lr=1e-4):
                 text_emb = sentence_model.encode(text, convert_to_tensor=True).to(device).detach().clone().float()
                 img_emb = get_image_embedding(image_path, clip_model, preprocess).to(device).detach().clone().float()
             except Exception as e:
-                print(f"⚠️ Skipping sample due to error: {e}")
+                if not status_callback:
+                    print(f"⚠️ Skipping sample due to error: {e}")
                 continue
 
             pred_emb = mapper_model(text_emb.unsqueeze(0)).squeeze(0)
@@ -83,7 +92,17 @@ def train_model(data_path="training_data.json", epochs=10, lr=1e-4):
 
             total_loss += loss.item()
 
-        print(f"📉 Epoch {epoch+1} Loss: {total_loss / len(data):.4f}")
+        if status_callback:
+            progress = int(((epoch + 1) / epochs) * 100)
+            status_callback(
+                f"Epoch {epoch + 1}/{epochs} Loss: {total_loss / len(data):.4f}",
+                progress,
+            )
+        else:
+            print(f"📉 Epoch {epoch+1} Loss: {total_loss / len(data):.4f}")
 
     save_trained_mapper_model(mapper_model)
-    print("✅ Training complete.")
+    if status_callback:
+        status_callback("Training complete.", 100)
+    else:
+        print("✅ Training complete.")
